@@ -1,0 +1,177 @@
+var express = require('express');
+var path = require('path');
+var favicon = require('static-favicon');
+var logger = require('morgan');
+var cookieParser = require('cookie-parser');
+var bodyParser = require('body-parser');
+var mongo = require('mongodb');
+var moment = require('moment');
+var socket_io = require("socket.io");
+
+var app = express();
+
+// view engine setup
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'hjs');
+
+app.use(favicon());
+app.use(logger('dev'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded());
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
+
+var blogName = "PCS Blog",
+    PAGE_SIZE = 10,
+    posts;
+    
+// connect to mongodb and get the posts collection
+mongo.MongoClient.connect("mongodb://localhost:27017/mongoblog", 
+    function (err, db) {
+        if (err) {
+            console.log(err);
+            return;
+        }
+        console.log("connected to mongo");
+        posts = db.collection('posts');
+});
+
+// change a milliseconds since epoch timestamp into a nice moment js timestamp
+function getTimeString(time) {
+    var now = new Date().getTime();
+    if (now - time < (1000 * 60 * 60 * 24)) {
+        return moment(time).fromNow();
+    } else {
+        return moment(time).calendar();
+    }
+}
+
+// controller for root page
+app.get('/', function(req, res, next) {
+    // get the appropriate posts for the requested "page" 
+    posts.find({},{limit: PAGE_SIZE, skip: (req.query.page || 0) * PAGE_SIZE}).sort({_id: -1}).toArray(function (err, blogPosts) {
+        if (err) {
+            console.warn(err);
+            err.status = 500;
+            next(err);
+        } else {
+            // fix the timestamps to be nice moment js timestamps - should probably really be done on client
+            blogPosts.forEach(function (post) {
+                post.time = getTimeString(post.time);
+                
+                if (post.comments) {
+                    post.comments.forEach(function (comment) {
+                        comment.time = getTimeString(comment.time);
+                    });
+                }
+            });
+            
+            // Render the "partial" view that has just the html for the posts and
+            // instead of sending it to the client - give it to our callback
+            res.render('posts', {
+                    title: blogName,
+                    posts: blogPosts
+                }, function (err, html) {
+                    if (err) {
+                        next(err);
+                    }
+                    // if user request was an ajax request, send them just the partial view
+                    if (req.xhr) {
+                        res.send(html);
+                        return;
+                    }
+                    
+                    // Otherwise render the full view and embed the partial view html that
+                    // we already rendered into it by passing it in the model
+                    res.render('index', {
+                        page: (req.query.page || 0),
+                        partial: html
+                    });
+                });
+        }
+    });
+});
+
+// get new post page
+app.get('/blog/new', function(req, res) {
+    res.render('newPost', {
+        title: blogName
+    });
+});
+
+// handle post of new "post"
+app.post('/blog/new', function(req, res) {
+    req.body.time = new Date().getTime();
+    posts.insert(req.body, function(err) {
+        if (err) {
+            console.warn(err);
+            err.status = 500;
+            next(err);
+        } else {
+            console.log("Added post");
+            res.redirect("/");
+        }
+    });
+});
+
+/// catch 404 and forward to error handler
+app.use(function(req, res, next) {
+    var err = new Error('Not Found');
+    err.status = 404;
+    next(err);
+});
+
+/// error handlers
+
+// development error handler
+// will print stacktrace
+if (app.get('env') === 'development') {
+    app.use(function(err, req, res, next) {
+        res.status(err.status || 500);
+        res.render('error', {
+            message: err.message,
+            error: err
+        });
+    });
+}
+
+// production error handler
+// no stacktraces leaked to user
+app.use(function(err, req, res, next) {
+    res.status(err.status || 500);
+    res.render('error', {
+        message: err.message,
+        error: {}
+    });
+});
+
+var io = socket_io.listen(app.listen(3700));
+
+// listen for new comments added by users
+io.on("connection", function (socket) {
+    console.log("client connected");
+    socket.on("comment", function (data) {
+        var theId = new mongo.BSONPure.ObjectID(data.post),
+            comment = {
+                time: new Date().getTime(),
+                author: data.author,
+                comment: data.comment
+            };
+        
+        // add the comment to the appropriate document
+        posts.update({_id: theId }, {
+            $push: { comments: comment }
+        }, function (err, result){
+            if (err) {
+                return console.warn(err);
+            }
+        });
+        
+        // send it to all users
+        comment.time = getTimeString(comment.time);
+        comment.post = data.post;
+        io.emit("comment", comment);
+    });
+});
+
+module.exports = app;

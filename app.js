@@ -11,6 +11,7 @@ var socket_io = require('socket.io');
 var app = express();
 var server = require('http').Server(app);
 var io = require('socket.io')(server);
+var ObjectId = require('mongodb').ObjectID;
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -54,16 +55,18 @@ app.use(function(err, req, res, next) {
 		error : {}
 	});
 });
+var chats;
 
 mongo.MongoClient.connect("mongodb://localhost:27017/class", function(err, db) {
 	if (err) {
-		console, log(err);
+		console.log(err);
 		return;
 	}
 	console.log("connected to mongo");
 	chats = db.collection("blogs");
 
 });
+
 io.on('connection', function(socket) {
 	console.log("client connected");
 	chats.find().toArray(function(err, messages) {
@@ -86,6 +89,26 @@ io.on('connection', function(socket) {
 		});
 		io.emit("sent", [data]);
 	});
+	socket.on("comment", function(data) {
+		io.sockets.emit("comment",data.singleComment);
+		var my=chats.find({"_id" : ObjectId("5279262e74d92da751eb2b8e")});
+		console.dir(my);
+		chats.update({
+			_id : ObjectId(data._id)
+		}, {
+			$push : {
+				comments : data.singleComment
+			}
+		},  function (err, result) {
+      if (err){
+      	console.log(err);
+      	return;
+      	}
+      
+  });
+  
+	
+	});
 });
-server.listen(8080);
+server.listen(8082);
 

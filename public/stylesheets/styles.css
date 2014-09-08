@@ -8,6 +8,14 @@ body {
 	color: #666;
 	font-weight: 200;
 }
+.fullPost{
+	border:solid;
+	padding: 10px;
+	margin-bottom: 10px;
+}
+.comment{
+	padding: 10px;
+}
 
 * {
 	margin:0;
@@ -126,7 +134,7 @@ form input, form select, form textarea {
 	font-size: 13px;
 }
 
-form input.formbutton {
+form input.formbutton ,form input.send {
 	border: none;
 	background: #7F577A;
 	color: #ffffff;
@@ -153,8 +161,9 @@ span.required {
 }
 
 h1 {
+	text-align: center;
 	color: #000;
-	font-size: 35px;
+	font-size: 45px;
 	font-family: 'Exo 2', Arial, sans-serif;
 }
 
@@ -233,7 +242,7 @@ header h1 a, header h1 a:hover {
     letter-spacing: -2px;
     line-height:45px;
     text-decoration: none;
-    text-transform: lowercase;
+    
 }
 
 
@@ -283,7 +292,7 @@ nav ul li a:hover {
 img.header-image { padding-top: 10px;
 			margin-bottom: -3px; }
 
-#body {
+.body {
 	background: none;
 	margin: 5px auto 0;
  	padding: 0;
@@ -313,6 +322,10 @@ article .article-info {
 
 article .article-info a { 
 	color: #666;
+}
+.post{
+    height:55px;
+    overflow: hidden;
 }
 
 .sidebar {
